@@ -1,0 +1,74 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: 'Playfair Display', serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body { font-family: var(--font-body); background: #FAFAF8; color: #1a1a1a; -webkit-font-smoothing: antialiased; }
+h1,h2,h3,h4,h5 { font-family: var(--font-display); }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.pb-safe { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
+
+/* Ticker */
+.ticker-wrap { overflow: hidden; }
+.ticker-inner { display: flex; white-space: nowrap; animation: ticker 30s linear infinite; }
+.ticker-inner:hover { animation-play-state: paused; }
+
+/* Rainbow divider */
+.rainbow-line {
+  height: 4px;
+  background: linear-gradient(90deg, #D72638 0%, #FF8C00 20%, #FFD600 40%, #06D6A0 60%, #00B4D8 80%, #7B2FBE 100%);
+}
+
+/* Powder splash hero */
+.hero-gradient {
+  background: linear-gradient(135deg,
+    rgba(215,38,56,0.92) 0%,
+    rgba(215,38,56,0.85) 40%,
+    rgba(123,47,190,0.7) 100%
+  );
+}
+
+/* Category pill colors */
+.pill-powders  { background: linear-gradient(135deg,#D72638,#FF4D6D); color:#fff; }
+.pill-books    { background: linear-gradient(135deg,#0077FF,#00B4D8); color:#fff; }
+.pill-soaps    { background: linear-gradient(135deg,#7B2FBE,#C261FF); color:#fff; }
+.pill-washing  { background: linear-gradient(135deg,#06D6A0,#00B4D8); color:#fff; }
+.pill-bleach   { background: linear-gradient(135deg,#FF8C00,#FFD600); color:#fff; }
+.pill-other    { background: linear-gradient(135deg,#64748b,#94a3b8); color:#fff; }
+
+/* Product popup overlay */
+.popup-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center; padding: 1rem;
+}
+
+/* Skeleton shimmer */
+@keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+.skeleton {
+  background: linear-gradient(90deg,#f0ede8 25%,#e0dbd4 50%,#f0ede8 75%);
+  background-size: 400px 100%; animation: shimmer 1.5s infinite; border-radius: 8px;
+}
+
+/* Star colors */
+.star-filled { color: #FFD600; fill: #FFD600; }
+.star-empty  { color: #d1d5db; fill: #d1d5db; }
+
+/* Smooth image slide */
+.img-slide { transition: transform 0.45s cubic-bezier(.4,0,.2,1); }
+
+/* Section fade-up */
+.fade-section { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
+.fade-section.visible { opacity: 1; transform: translateY(0); }
