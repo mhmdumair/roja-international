@@ -1,79 +1,478 @@
 "use client";
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { ShoppingBag, Package, Star, TrendingUp, AlertTriangle, Clock, Loader2 } from "lucide-react";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { formatPrice, formatDate } from "@/lib/utils";
-import { format } from "date-fns";
+import { useState, useEffect, useCallback } from "react";
+import { Loader2, Save, Upload, X } from "lucide-react";
+import Image from "next/image";
+import { useDropzone } from "react-dropzone";
+import { cloudinaryUrl } from "@/lib/utils";
+import { toast } from "@/components/Toaster";
 
-interface Stats { todayOrders:number; pendingOrders:number; totalProducts:number; pendingReviews:number; totalRevenue:number; recentOrders:{id:string;orderNumber:string;buyerName:string;totalAmount:number;status:string;createdAt:string;items:{product:{name:string}}[]}[]; lowStock:{id:string;name:string;stock:number}[]; dailyStats:{date:string;orders:number;revenue:number}[]; }
+const TABS = ["Store Info", "Contact & Social", "Delivery", "Hero Images"];
 
-const ST: Record<string,string> = { pending:"bg-yellow-500/20 text-yellow-400", confirmed:"bg-blue-500/20 text-blue-400", processing:"bg-purple-500/20 text-purple-400", delivered:"bg-green-500/20 text-green-400", cancelled:"bg-red-500/20 text-red-400" };
+type S = {
+  storeName: string; tagline: string; ownerName: string; ownerPhone: string;
+  ownerEmail: string; whatsappNumber: string; address: string; openingHours: string;
+  facebook: string; instagram: string; tiktok: string; deliveryNote: string;
+  minOrderNote: string; aboutText: string; heroImages: string[];
+};
 
-export default function Dashboard() {
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => { fetch("/api/admin/stats").then(r=>r.json()).then(d=>{setStats(d);setLoading(false);}).catch(()=>setLoading(false)); }, []);
-  if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-[#D72638]" /></div>;
-  if (!stats) return <div className="text-gray-500 text-center py-20">Failed to load</div>;
-  const chartData = stats.dailyStats.map(d => ({ date: format(new Date(d.date),"MMM d"), orders:d.orders, revenue:d.revenue }));
+const EMPTY: S = {
+  storeName: "Roja International", tagline: "", ownerName: "", ownerPhone: "",
+  ownerEmail: "", whatsappNumber: "", address: "", openingHours: "",
+  facebook: "", instagram: "", tiktok: "", deliveryNote: "",
+  minOrderNote: "", aboutText: "", heroImages: [],
+};
+
+// ─── Hero Image Uploader ────────────────────────────────────────────────────────
+function HeroImages({
+  images,
+  onChange,
+}: {
+  images: string[];
+  onChange: (imgs: string[]) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState("");
+
+  const onDrop = useCallback(
+    async (acceptedFiles: File[]) => {
+      const toUpload = acceptedFiles.slice(0, 5 - images.length);
+      if (!toUpload.length) return;
+
+      setUploading(true);
+      setProgress("Getting credentials...");
+
+      try {
+        // 1. Get signed params from our server
+        const paramRes = await fetch("/api/upload", { method: "POST" });
+        if (!paramRes.ok) {
+          const err = await paramRes.json().catch(() => ({}));
+          throw new Error(
+            err.error || "Could not get upload credentials. Check CLOUDINARY_API_SECRET in .env"
+          );
+        }
+
+        const { signature, timestamp, cloudName, apiKey, folder } =
+          await paramRes.json();
+
+        if (!cloudName || !apiKey || !signature) {
+          throw new Error(
+            "Cloudinary credentials missing. Set NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in your .env file."
+          );
+        }
+
+        const uploaded: string[] = [];
+
+        // 2. Upload each file directly to Cloudinary — NO upload_preset needed
+        for (let i = 0; i < toUpload.length; i++) {
+          const file = toUpload[i];
+          setProgress(`Uploading slide ${i + 1} of ${toUpload.length}...`);
+
+          const fd = new FormData();
+          fd.append("file", file);
+          fd.append("api_key", apiKey);
+          fd.append("timestamp", String(timestamp));
+          fd.append("signature", signature);
+          fd.append("folder", folder);
+          // ✅ No upload_preset needed for signed uploads
+
+          const res = await fetch(
+            `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+            { method: "POST", body: fd }
+          );
+
+          const data = await res.json();
+
+          if (!res.ok || data.error) {
+            throw new Error(
+              data.error?.message ||
+                `Cloudinary rejected the upload (${res.status}). Check your API credentials.`
+            );
+          }
+
+          if (data.secure_url) uploaded.push(data.secure_url);
+        }
+
+        onChange([...images, ...uploaded]);
+        toast(`${uploaded.length} hero image(s) uploaded`, "success");
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Upload failed";
+        toast(msg, "error");
+        console.error("Hero upload error:", err);
+      } finally {
+        setUploading(false);
+        setProgress("");
+      }
+    },
+    [images, onChange]
+  );
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      "image/jpeg": [],
+      "image/png": [],
+      "image/webp": [],
+    },
+    multiple: true,
+    disabled: uploading || images.length >= 5,
+    maxSize: 10 * 1024 * 1024,
+  });
+
+  const remove = (url: string) => {
+    fetch("/api/upload", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    }).catch(() => {});
+    onChange(images.filter((i) => i !== url));
+  };
+
   return (
-    <div className="space-y-6 max-w-6xl">
-      <h1 className="font-display text-2xl font-bold text-white">Dashboard</h1>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[{label:"Today's Orders",val:stats.todayOrders,icon:ShoppingBag,c:"text-[#D72638] bg-[#D72638]/10"},{label:"Pending",val:stats.pendingOrders,icon:Clock,c:"text-yellow-400 bg-yellow-500/10"},{label:"Products",val:stats.totalProducts,icon:Package,c:"text-blue-400 bg-blue-500/10"},{label:"Pending Reviews",val:stats.pendingReviews,icon:Star,c:"text-purple-400 bg-purple-500/10"}].map(s=>(
-          <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex items-start justify-between">
-            <div><p className="text-gray-500 text-xs">{s.label}</p><p className="font-display text-3xl font-bold text-white mt-1">{s.val}</p></div>
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${s.c.split(" ")[1]}`}><s.icon className={`w-5 h-5 ${s.c.split(" ")[0]}`} /></div>
-          </div>
+    <div className="space-y-4">
+      <p className="text-gray-400 text-xs leading-relaxed">
+        Upload up to 5 hero slider images for your homepage.{" "}
+        <strong className="text-gray-300">Recommended: 1400 × 600 px, landscape.</strong>
+      </p>
+
+      {/* Previews */}
+      {images.length > 0 && (
+        <div className="flex flex-wrap gap-3">
+          {images.map((url, i) => (
+            <div
+              key={url}
+              className="relative w-36 h-24 rounded-xl overflow-hidden bg-gray-800 group border border-gray-700"
+            >
+              <Image
+                src={cloudinaryUrl(url, 300, 200)}
+                alt={`Slide ${i + 1}`}
+                fill
+                className="object-cover"
+                sizes="144px"
+              />
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <button
+                  type="button"
+                  onClick={() => remove(url)}
+                  className="bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded font-semibold">
+                Slide {i + 1}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Drop zone */}
+      {images.length < 5 && (
+        <div
+          {...getRootProps()}
+          className={`border-2 border-dashed rounded-xl p-7 text-center transition-colors ${
+            uploading
+              ? "border-gray-700 bg-gray-800/40 cursor-not-allowed"
+              : isDragActive
+              ? "border-[#D72638] bg-[#D72638]/10 cursor-copy"
+              : "border-gray-700 hover:border-gray-500 hover:bg-gray-800/30 cursor-pointer"
+          }`}
+        >
+          <input {...getInputProps()} />
+          {uploading ? (
+            <div className="flex flex-col items-center gap-2">
+              <Loader2 className="w-6 h-6 animate-spin text-[#D72638]" />
+              <p className="text-gray-400 text-sm">{progress}</p>
+            </div>
+          ) : (
+            <>
+              <Upload className="w-7 h-7 mx-auto text-gray-500 mb-2" />
+              <p className="text-gray-300 text-sm font-medium">
+                {isDragActive ? "Drop slides here" : "Click or drag hero images here"}
+              </p>
+              <p className="text-gray-600 text-xs mt-1">
+                JPG, PNG, WebP · Max 10 MB · {images.length} / 5 uploaded
+              </p>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Settings Page ──────────────────────────────────────────────────────────────
+export default function AdminSettings() {
+  const [tab, setTab] = useState(0);
+  const [form, setForm] = useState<S>(EMPTY);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/settings")
+      .then((r) => r.json())
+      .then((d) => {
+        setForm(
+          Object.fromEntries(
+            Object.entries(EMPTY).map(([k]) => [k, d[k] ?? EMPTY[k as keyof S]])
+          ) as S
+        );
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const set = (k: keyof S, v: unknown) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Failed");
+      toast("Settings saved!", "success");
+    } catch (err: unknown) {
+      toast(
+        err instanceof Error ? err.message : "Failed to save settings",
+        "error"
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const iC =
+    "w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#D72638]/30 placeholder-gray-600";
+  const lC = "block text-xs font-medium text-gray-400 mb-1.5";
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-[#D72638]" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5 max-w-2xl">
+      <h1 className="font-display text-2xl font-bold text-white">
+        Store Settings
+      </h1>
+
+      {/* Tab bar */}
+      <div className="flex bg-gray-900 border border-gray-800 rounded-xl p-1 overflow-x-auto gap-1">
+        {TABS.map((t, i) => (
+          <button
+            key={t}
+            onClick={() => setTab(i)}
+            className={`shrink-0 px-3 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
+              tab === i
+                ? "bg-[#D72638] text-white"
+                : "text-gray-500 hover:text-white"
+            }`}
+          >
+            {t}
+          </button>
         ))}
       </div>
-      <div className="bg-gradient-to-r from-[#D72638]/20 to-[#FF8C00]/20 border border-[#D72638]/20 rounded-2xl p-5 flex items-center justify-between">
-        <div><p className="text-gray-400 text-sm">Total Revenue</p><p className="font-display text-4xl font-bold text-white mt-1">{formatPrice(stats.totalRevenue)}</p></div>
-        <TrendingUp className="w-12 h-12 text-[#D72638]/40" />
+
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4">
+
+        {/* ── Store Info ── */}
+        {tab === 0 && (
+          <>
+            <div>
+              <label className={lC}>Store Name *</label>
+              <input
+                value={form.storeName}
+                onChange={(e) => set("storeName", e.target.value)}
+                className={iC}
+                placeholder="Roja International"
+              />
+            </div>
+            <div>
+              <label className={lC}>Tagline</label>
+              <input
+                value={form.tagline}
+                onChange={(e) => set("tagline", e.target.value)}
+                className={iC}
+                placeholder="Sri Lanka's favourite colour store"
+              />
+            </div>
+            <div>
+              <label className={lC}>Store Address</label>
+              <textarea
+                rows={2}
+                value={form.address}
+                onChange={(e) => set("address", e.target.value)}
+                className={`${iC} resize-none`}
+                placeholder="No. 12, Main Street, Colombo 03"
+              />
+            </div>
+            <div>
+              <label className={lC}>Opening Hours</label>
+              <input
+                value={form.openingHours}
+                onChange={(e) => set("openingHours", e.target.value)}
+                className={iC}
+                placeholder="Mon–Sat: 8am – 8pm"
+              />
+            </div>
+            <div>
+              <label className={lC}>
+                About Text{" "}
+                <span className="text-gray-600">(shown on About Us page)</span>
+              </label>
+              <textarea
+                rows={5}
+                value={form.aboutText}
+                onChange={(e) => set("aboutText", e.target.value)}
+                className={`${iC} resize-none`}
+                placeholder="Tell customers about your store..."
+              />
+            </div>
+          </>
+        )}
+
+        {/* ── Contact & Social ── */}
+        {tab === 1 && (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={lC}>Owner Name</label>
+                <input
+                  value={form.ownerName}
+                  onChange={(e) => set("ownerName", e.target.value)}
+                  className={iC}
+                  placeholder="Roja Perera"
+                />
+              </div>
+              <div>
+                <label className={lC}>Phone Number</label>
+                <input
+                  value={form.ownerPhone}
+                  onChange={(e) => set("ownerPhone", e.target.value)}
+                  className={iC}
+                  placeholder="+94 77 123 4567"
+                />
+              </div>
+              <div>
+                <label className={lC}>Email</label>
+                <input
+                  type="email"
+                  value={form.ownerEmail}
+                  onChange={(e) => set("ownerEmail", e.target.value)}
+                  className={iC}
+                  placeholder="owner@gmail.com"
+                />
+              </div>
+              <div>
+                <label className={lC}>WhatsApp Number</label>
+                <input
+                  value={form.whatsappNumber}
+                  onChange={(e) => set("whatsappNumber", e.target.value)}
+                  className={iC}
+                  placeholder="94771234567"
+                />
+                <p className="text-gray-600 text-xs mt-1">
+                  Country code + number, no + or spaces
+                </p>
+              </div>
+            </div>
+            <div className="border-t border-gray-800 pt-4 space-y-3">
+              <p className="text-gray-400 text-sm font-medium">Social Media</p>
+              <div>
+                <label className={lC}>Facebook URL</label>
+                <input
+                  value={form.facebook}
+                  onChange={(e) => set("facebook", e.target.value)}
+                  className={iC}
+                  placeholder="https://facebook.com/yourpage"
+                />
+              </div>
+              <div>
+                <label className={lC}>Instagram URL</label>
+                <input
+                  value={form.instagram}
+                  onChange={(e) => set("instagram", e.target.value)}
+                  className={iC}
+                  placeholder="https://instagram.com/yourprofile"
+                />
+              </div>
+              <div>
+                <label className={lC}>TikTok URL</label>
+                <input
+                  value={form.tiktok}
+                  onChange={(e) => set("tiktok", e.target.value)}
+                  className={iC}
+                  placeholder="https://tiktok.com/@yourprofile"
+                />
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ── Delivery ── */}
+        {tab === 2 && (
+          <>
+            <div>
+              <label className={lC}>Delivery Note</label>
+              <input
+                value={form.deliveryNote}
+                onChange={(e) => set("deliveryNote", e.target.value)}
+                className={iC}
+                placeholder="Free delivery on orders over Rs. 2,000"
+              />
+              <p className="text-gray-600 text-xs mt-1">
+                Shown in cart, checkout, and the homepage ticker banner
+              </p>
+            </div>
+            <div>
+              <label className={lC}>Minimum Order Note</label>
+              <input
+                value={form.minOrderNote}
+                onChange={(e) => set("minOrderNote", e.target.value)}
+                className={iC}
+                placeholder="Minimum order Rs. 500"
+              />
+              <p className="text-gray-600 text-xs mt-1">
+                Shown in the homepage ticker banner
+              </p>
+            </div>
+          </>
+        )}
+
+        {/* ── Hero Images ── */}
+        {tab === 3 && (
+          <HeroImages
+            images={form.heroImages}
+            onChange={(imgs) => set("heroImages", imgs)}
+          />
+        )}
       </div>
-      {chartData.length > 0 && (
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-          <h3 className="font-display font-semibold text-white mb-4">Orders — Last 30 Days</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={chartData}>
-              <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#D72638" stopOpacity={0.3}/><stop offset="95%" stopColor="#D72638" stopOpacity={0}/></linearGradient></defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937"/>
-              <XAxis dataKey="date" stroke="#4b5563" tick={{fontSize:11}}/>
-              <YAxis stroke="#4b5563" tick={{fontSize:11}}/>
-              <Tooltip contentStyle={{background:"#111827",border:"1px solid #1f2937",borderRadius:8,color:"#fff"}}/>
-              <Area type="monotone" dataKey="orders" stroke="#D72638" fill="url(#g)" strokeWidth={2}/>
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-      {stats.lowStock.length > 0 && (
-        <div className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-4">
-          <div className="flex items-center gap-2 mb-3"><AlertTriangle className="w-5 h-5 text-orange-400"/><h3 className="font-semibold text-orange-300">Low Stock Warning</h3></div>
-          <div className="flex flex-wrap gap-2">{stats.lowStock.map(p=><Link key={p.id} href="/admin/products" className="flex items-center gap-2 bg-orange-500/10 border border-orange-500/20 text-orange-300 text-xs px-3 py-1.5 rounded-full hover:bg-orange-500/20">{p.name}<span className="bg-orange-500/30 px-1.5 py-0.5 rounded-full text-[10px] font-bold">{p.stock}</span></Link>)}</div>
-        </div>
-      )}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between"><h3 className="font-display font-semibold text-white">Recent Orders</h3><Link href="/admin/orders" className="text-[#D72638] text-sm hover:underline">View All →</Link></div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b border-gray-800">{["Order #","Customer","Items","Total","Status","Date"].map(h=><th key={h} className="text-left px-4 py-3 text-gray-500 font-medium text-xs uppercase tracking-wide whitespace-nowrap">{h}</th>)}</tr></thead>
-            <tbody>
-              {stats.recentOrders.map(o=>(
-                <tr key={o.id} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
-                  <td className="px-4 py-3"><Link href={`/admin/orders/${o.id}`} className="font-mono text-[#D72638] hover:underline text-xs">{o.orderNumber}</Link></td>
-                  <td className="px-4 py-3 text-gray-200 whitespace-nowrap">{o.buyerName}</td>
-                  <td className="px-4 py-3 text-gray-500 text-xs max-w-[140px] truncate">{o.items.map(i=>i.product.name).join(", ")}</td>
-                  <td className="px-4 py-3 text-white font-semibold whitespace-nowrap">{formatPrice(o.totalAmount)}</td>
-                  <td className="px-4 py-3"><span className={`px-2 py-1 rounded-full text-xs font-semibold ${ST[o.status]||ST.pending}`}>{o.status}</span></td>
-                  <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{formatDate(o.createdAt)}</td>
-                </tr>
-              ))}
-              {stats.recentOrders.length===0&&<tr><td colSpan={6} className="text-center py-10 text-gray-600">No orders yet</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </div>
+
+      <button
+        onClick={save}
+        disabled={saving}
+        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-white disabled:opacity-50 hover:opacity-90 transition-opacity"
+        style={{ background: "linear-gradient(135deg,#D72638,#FF8C00)" }}
+      >
+        {saving ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Saving...
+          </>
+        ) : (
+          <>
+            <Save className="w-4 h-4" />
+            Save Settings
+          </>
+        )}
+      </button>
     </div>
   );
 }
