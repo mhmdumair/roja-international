@@ -2,9 +2,14 @@ import Link from "next/link";
 import { Sparkles, MapPin, Phone, Mail, Clock, Facebook, Instagram, ExternalLink } from "lucide-react";
 
 interface Settings {
-  storeName?: string; address?: string; ownerPhone?: string;
-  ownerEmail?: string; openingHours?: string; facebook?: string;
-  instagram?: string; whatsappNumber?: string;
+  storeName?: string | null;
+  address?: string | null;
+  ownerPhone?: string | null;
+  ownerEmail?: string | null;
+  openingHours?: string | null;
+  facebook?: string | null;
+  instagram?: string | null;
+  whatsappNumber?: string | null;
 }
 
 export default function Footer({ settings }: { settings?: Settings | null }) {
