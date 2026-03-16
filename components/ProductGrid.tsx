@@ -9,7 +9,7 @@ export interface ProductCard {
   id: string; name: string; slug: string; description: string; longDesc?: string | null;
   price: number; comparePrice?: number | null; unit: string; stock: number;
   category: string; images: string[]; featured: boolean;
-  reviews?: { id: string; rating: number; buyerName: string; comment: string; createdAt: string }[];
+  reviews?: { id: string; rating: number; buyerName: string; comment: string; createdAt: string | Date }[];
 }
 
 const CAT_COLORS: Record<string, string> = {
