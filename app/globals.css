@@ -12,7 +12,7 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; }
-body { font-family: var(--font-body); background: #FAFAF8; color: #1a1a1a; -webkit-font-smoothing: antialiased; }
+body { font-family: var(--font-body);  color: #1a1a1a; -webkit-font-smoothing: antialiased; }
 h1,h2,h3,h4,h5 { font-family: var(--font-display); }
 
 .no-scrollbar::-webkit-scrollbar { display: none; }

@@ -17,10 +17,12 @@ export default function Navbar() {
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const { count, open: openCart } = useCart();
   const cartCount = count();
 
   useEffect(() => {
+    setIsMounted(true);
     const fn = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", fn, { passive: true });
     return () => window.removeEventListener("scroll", fn);
@@ -72,7 +74,7 @@ export default function Navbar() {
           <div className="flex items-center gap-2">
             <button onClick={openCart} className="relative p-2.5 rounded-xl hover:bg-gray-100 transition-colors" aria-label="Cart">
               <ShoppingCart className="w-5 h-5 text-gray-700" />
-              {cartCount > 0 && (
+              {isMounted && cartCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-[#D72638] text-white text-[10px] font-bold rounded-full flex items-center justify-center">
                   {cartCount > 9 ? "9+" : cartCount}
                 </span>

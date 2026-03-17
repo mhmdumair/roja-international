@@ -15,12 +15,12 @@ interface Product {
 
 function Stars({ value, size = 16 }: { value: number; size?: number }) {
   return (
-    <div className="flex gap-0.5">
+    <span className="flex gap-0.5">
       {[1,2,3,4,5].map(s => (
         <Star key={s} style={{ width: size, height: size }}
           className={s <= Math.round(value) ? "fill-yellow-400 text-yellow-400" : "fill-gray-200 text-gray-200"} />
       ))}
-    </div>
+    </span>
   );
 }
 
